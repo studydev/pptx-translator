@@ -1,6 +1,8 @@
 # pptx-translator
 
-> Azure OpenAI GPT로 PowerPoint(.pptx)를 **서식 그대로** 다국어 번역하는 Python CLI 도구
+> Azure OpenAI GPT로 PowerPoint(.pptx)를 **서식 그대로** 다국어 번역하는 Python CLI 도구  
+※ 이 문서는 [Azure OpenAI](https://azure.microsoft.com/en-us/products/ai-foundry/models/openai)를 통해 Endpoint와 API 키를 발급받아야 즉시 사용 가능합니다.
+
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -36,8 +38,9 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-`.env`에 Azure OpenAI 자격 증명을 입력:
-
+- `.env`에 Azure OpenAI 자격 증명을 입력
+- 아래 2개의 `<<~~~>>` 표시는 본인의 값으로 대체하세요.
+  
 ```dotenv
 AZURE_OPENAI_ENDPOINT=<<https://your-resource.openai.azure.com/>>
 AZURE_OPENAI_API_KEY=<<your-api-key>>
@@ -45,7 +48,7 @@ AZURE_OPENAI_DEPLOYMENT_NAME=gpt-52
 AZURE_OPENAI_API_VERSION=2025-04-01-preview
 ```
 
-> `<< >>` 부분을 실제 값으로 교체하세요.
+
 
 ### 3. 실행
 
@@ -60,7 +63,7 @@ python main.py work.pptx ko -v                  # 상세 로그
 ![cli-sample](images/cli.png)  
 
 번역 결과물:  
-![before-after](images/sample1.png)
+![before-after](images/sample2.png)
 
 <details>
 <summary>📋 전체 CLI 옵션</summary>
