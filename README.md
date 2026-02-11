@@ -59,7 +59,8 @@ python main.py work.pptx ko -v                  # 상세 로그
 ![cli-sample](images/cli.png)  
 
 번역 결과물:  
-![before-after](images/sample.png)
+<!-- ![before-after](images/sample1.png) -->
+![before-after](images/sample1.png)
 
 <details>
 <summary>📋 전체 CLI 옵션</summary>
