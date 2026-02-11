@@ -81,25 +81,6 @@ target_lang      대상 언어 코드 (ko, ja, zh, en, ...)
 
 ## 🔄 번역 파이프라인
 
-```
-  PPTX Load ─── python-pptx parsing
-       │
-       ▼
-  Phase 0 ───── presentation context       (top 5 slides, 1 API call)
-       │
-       ▼
-  ┌─► Batch ──── translate all items        (1 API call / slide)
-  │    │         text boxes + table cells + notes
-  │    │         + recent translation history (last 3 slides)
-  │    ▼
-  │   Apply ──── XML <a:t> replace          (style 100% preserved)
-  │    │
-  └────┘  next slide
-       │
-       ▼
-  Save ───────── output_ko.pptx
-```
-
 ### API 호출 구조
 
 | 단계 | 호출 | 설명 |
@@ -110,18 +91,56 @@ target_lang      대상 언어 코드 (ko, ja, zh, en, ...)
 
 ---
 
-## 📁 구조
+## 📁 구조 & 파이프라인 매핑
 
 ```
 pptx-translator/
-  ├── main.py ··········· CLI + pipeline orchestration
-  ├── pptx_handler.py ··· PPTX parse / XML style engine
-  ├── translator.py ····· Azure OpenAI translation API
+  ├── main.py ··········· CLI + 파이프라인 오케스트레이션
+  │                        ├─ PPTX 로드 / 복제
+  │                        ├─ Phase 0 호출 (translator.py)
+  │                        ├─ 슬라이드 루프: Batch 번역 → Apply
+  │                        └─ 결과 저장
+  │
+  ├── translator.py ····· Azure OpenAI 번역 엔진
+  │                        ├─ get_presentation_summary()  ← Phase 0
+  │                        ├─ translate_slide_batch()      ← Batch (1 call/slide)
+  │                        └─ translate_styled_text()      ← 개별 폴백
+  │
+  ├── pptx_handler.py ··· PPTX 파싱 / XML 스타일 엔진
+  │                        ├─ extract_styled_paragraphs()  ← Run 구조 + rPr 추출
+  │                        ├─ apply_translated_runs()      ← <a:t> 교체 + 스타일 재배치
+  │                        ├─ _replace_rPr_xml()           ← 어순 변경 시 <a:rPr> 교체
+  │                        └─ _set_run_target_font()       ← 다국어 폰트 설정
+  │
   ├── requirements.txt
   ├── .env.example
   ├── LICENSE ··········· MIT
   ├── CODE_OF_CONDUCT.md
   └── README.md
+```
+
+```
+  PPTX Load ─── main.py: python-pptx parsing
+       │
+       ▼
+  Phase 0 ───── translator.py: get_presentation_summary()     (1 API call)
+       │
+       ▼
+  ┌─► Extract ── pptx_handler.py: extract_styled_paragraphs()
+  │    │         Run 구조 + style_id 매핑 + rPr XML 보존
+  │    ▼
+  │   Batch ──── translator.py: translate_slide_batch()        (1 API call)
+  │    │         텍스트박스 + 테이블 셀 + 노트 통합
+  │    │         + 최근 3장 번역 이력 참조
+  │    ▼
+  │   Apply ──── pptx_handler.py: apply_translated_runs()
+  │    │         XML <a:t> 텍스트 교체
+  │    │         + 어순 변경 시 <a:rPr> 스타일 재배치
+  │    │
+  └────┘  next slide
+       │
+       ▼
+  Save ───────── main.py: output_ko.pptx
 ```
 
 ---
