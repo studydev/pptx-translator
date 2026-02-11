@@ -55,6 +55,12 @@ python main.py work.pptx ko -s 3-10             # 3~10번 슬라이드만
 python main.py work.pptx ko -v                  # 상세 로그
 ```
 
+동작 예시:  
+![cli-sample](images/cli.png)  
+
+번역 결과물:  
+![before-after](images/sample.png)
+
 <details>
 <summary>📋 전체 CLI 옵션</summary>
 
