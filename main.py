@@ -133,7 +133,8 @@ def translate_text_frame(text_frame, context: str, target_lang: str,
     # 번역 결과 적용 (run.text 교체 방식 — XML 조작 없음)
     try:
         apply_translated_runs(text_frame, translated, styled_data["styles"],
-                              target_font=target_font, target_lang=target_lang)
+                              target_font=target_font, target_lang=target_lang,
+                              rPr_xml_map=styled_data.get("rPr_xml_map"))
         # 교체 로그
         translated_text = " | ".join(
             "".join(r["text"] for r in p["runs"])
@@ -259,7 +260,8 @@ def translate_slide(slide, slide_num: int, target_lang: str,
                 try:
                     apply_translated_runs(
                         text_frame, translated, styled_data["styles"],
-                        target_font=target_font, target_lang=target_lang
+                        target_font=target_font, target_lang=target_lang,
+                        rPr_xml_map=styled_data.get("rPr_xml_map")
                     )
                     if source == "text_frame":
                         stats["text_frames"] += 1
@@ -277,7 +279,8 @@ def translate_slide(slide, slide_num: int, target_lang: str,
             try:
                 apply_translated_runs(
                     text_frame, translated_map[box_id], styled_data["styles"],
-                    target_font=target_font, target_lang=target_lang
+                    target_font=target_font, target_lang=target_lang,
+                    rPr_xml_map=styled_data.get("rPr_xml_map")
                 )
                 if source == "text_frame":
                     stats["text_frames"] += 1

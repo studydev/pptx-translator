@@ -156,6 +156,7 @@ def extract_styled_paragraphs(text_frame) -> dict | None:
         텍스트가 없으면 None 반환.
     """
     styles_map: dict[str, dict] = {}
+    rPr_xml_map: dict[str, Any] = {}  # style_id → <a:rPr> XML deep copy
     key_to_id: dict[str, str] = {}
     style_counter = 0
     paragraphs_data = []
@@ -177,9 +178,17 @@ def extract_styled_paragraphs(text_frame) -> dict | None:
                 key_to_id[sk] = sid
                 styles_map[sid] = rs
 
+            sid = key_to_id[sk]
+
+            # <a:rPr> XML deep copy 보존 (스타일 재배치용)
+            rPr = run._r.find(qn('a:rPr'))
+            rPr_copy = copy.deepcopy(rPr) if rPr is not None else None
+            if sid not in rPr_xml_map and rPr_copy is not None:
+                rPr_xml_map[sid] = rPr_copy
+
             runs_data.append({
                 "text": text,
-                "style_id": key_to_id[sk],
+                "style_id": sid,
             })
 
         # Run이 없는 경우(순수 텍스트가 paragraph에 직접 있는 경우)
@@ -202,6 +211,7 @@ def extract_styled_paragraphs(text_frame) -> dict | None:
 
     return {
         "styles": styles_map,
+        "rPr_xml_map": rPr_xml_map,
         "paragraphs": paragraphs_data,
     }
 
@@ -329,32 +339,45 @@ def _set_run_target_font(run, target_font, target_lang):
     rPr.append(new_elem)
 
 
+def _replace_rPr_xml(run, new_rPr):
+    """
+    Run의 <a:rPr> 요소를 교체합니다.
+    번역 시 어순 변경으로 스타일 위치가 바뀔 때 사용됩니다.
+    """
+    r_elem = run._r
+    old_rPr = r_elem.find(qn('a:rPr'))
+    new_copy = copy.deepcopy(new_rPr)
+    if old_rPr is not None:
+        r_elem.replace(old_rPr, new_copy)
+    else:
+        r_elem.insert(0, new_copy)
+
+
 def apply_translated_runs(text_frame, translated_data: dict, styles_map: dict,
                           original_paragraphs_xml=None, styles_rPr_xml=None,
                           target_font: str | None = None,
-                          target_lang: str | None = None):
+                          target_lang: str | None = None,
+                          rPr_xml_map: dict | None = None):
     """
     번역된 데이터를 TextFrame에 적용합니다.
 
     ★ 핵심 원칙: XML 레벨에서 <a:t> 텍스트만 교체.
-    기존 Run의 <a:rPr>(서식 정보)를 일체 건드리지 않아
-    폰트, 색상, 크기, 볼드/이탤릭 등 서식을 100% 보존합니다.
-    폰트는 PowerPoint 테마의 East Asian 폴백에 맡깁니다.
+    어순 변경으로 스타일 위치가 바뀌는 경우에만 <a:rPr>도 재배치합니다.
 
     전략:
     - paragraph 수가 같으면 1:1 매핑
     - 각 paragraph 내에서:
-      - Run 수 동일 → 1:1 텍스트 교체 (최상의 스타일 보존)
+      - Run 수 동일 + style_id 순서 동일 → 텍스트만 교체 (최상의 보존)
+      - Run 수 동일 + style_id 순서 다름 → 텍스트 교체 + <a:rPr> 재배치
       - Run 수 다름 → 첫 번째 Run에 전체 번역 텍스트, 나머지 비움
 
     Args:
         text_frame: python-pptx TextFrame 객체
         translated_data: {"paragraphs": [{"runs": [{"text": "...", "style_id": "S0"}, ...]}]}
-        styles_map: 스타일 ID → 속성 매핑 (인터페이스 호환용)
-        original_paragraphs_xml: (인터페이스 호환용)
-        styles_rPr_xml: (인터페이스 호환용)
-        target_font: (인터페이스 호환용, 현재 사용하지 않음)
-        target_lang: (인터페이스 호환용, 현재 사용하지 않음)
+        styles_map: 스타일 ID → 속성 매핑
+        rPr_xml_map: style_id → <a:rPr> XML deep copy (스타일 재배치용)
+        target_font: 대상 언어 폰트
+        target_lang: 대상 언어 코드
     """
     translated_paras = translated_data.get("paragraphs", [])
     orig_paragraphs = list(text_frame.paragraphs)
@@ -362,32 +385,36 @@ def apply_translated_runs(text_frame, translated_data: dict, styles_map: dict,
     for p_idx, paragraph in enumerate(orig_paragraphs):
         orig_runs = list(paragraph.runs)
         if not orig_runs:
-            continue  # Run이 없는 paragraph는 건드리지 않음
+            continue
 
-        # 대응하는 번역 paragraph가 있는지 확인
         if p_idx < len(translated_paras):
             t_para = translated_paras[p_idx]
             t_runs = t_para.get("runs", [])
-            # 번역된 전체 텍스트
             full_translated = "".join(r.get("text", "") for r in t_runs)
         else:
-            # 번역 paragraph가 부족하면 원문 유지
             continue
 
         if not full_translated and not any(r.get("text", "") for r in t_runs):
-            # 번역 결과가 완전히 비어 있으면 원문 유지
             continue
 
         if len(t_runs) == len(orig_runs):
-            # ── Run 수가 동일 → 1:1 매핑 (최상의 스타일 보존) ──
-            for orig_run, t_run in zip(orig_runs, t_runs):
+            # ── Run 수 동일: 텍스트 교체 + style_id에 맞는 rPr 적용 ──
+            for i, (orig_run, t_run) in enumerate(zip(orig_runs, t_runs)):
                 new_text = t_run.get("text", "")
                 _replace_run_text_xml(orig_run, new_text)
+
+                # rPr_xml_map이 있으면 번역 결과의 style_id에 맞게 rPr 적용
+                # → 어순 변경으로 스타일 위치가 바뀌어도 정확한 서식 유지
+                t_sid = t_run.get("style_id")
+                if rPr_xml_map and t_sid and t_sid in rPr_xml_map:
+                    _replace_rPr_xml(orig_run, rPr_xml_map[t_sid])
+
                 if target_font and new_text:
                     _set_run_target_font(orig_run, target_font, target_lang)
+
             logger.debug(f"  P{p_idx}: 1:1 Run 매핑 ({len(orig_runs)}개)")
         else:
-            # ── Run 수가 다름 → 첫 번째 Run에 전체 텍스트, 나머지 비움 ──
+            # ── Run 수 다름 → 첫 번째 Run에 전체 텍스트, 나머지 비움 ──
             _replace_run_text_xml(orig_runs[0], full_translated)
             if target_font and full_translated:
                 _set_run_target_font(orig_runs[0], target_font, target_lang)
