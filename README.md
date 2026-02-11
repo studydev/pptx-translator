@@ -60,7 +60,7 @@ python main.py work.pptx ko -v                  # 상세 로그
 
 번역 결과물:  
 <!-- ![before-after](images/sample1.png) -->
-![before-after](images/sample1.png)
+![before-after](images/sample2.png)
 
 <details>
 <summary>📋 전체 CLI 옵션</summary>
